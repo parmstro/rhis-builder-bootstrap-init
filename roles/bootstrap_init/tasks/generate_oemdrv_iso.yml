@@ -1,0 +1,24 @@
+---
+
+- name: "Ensure the iso directory exists"
+  ansible.builtin.file:
+    path: "{{ bootstrap_init_iso_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "Create an OEMDRV iso with the ks.cfg on it"
+  community.general.iso_create:
+    src_files:
+      - "{{ bootstrap_init_oem_dir }}/{{ bootstrap_init_ks_path }}"
+    dest_iso: "{{ bootstrap_init_iso_dir }}/{{ bootstrap_init_host.rhis_role }}_{{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }}.oemdrv.iso"
+    interchange_level: 3
+    vol_ident: "OEMDRV"
+
+- name: "Set ownership on OEMDRV iso"
+  ansible.builtin.file:
+    path: "{{ bootstrap_init_iso_dir }}/{{ bootstrap_init_host.rhis_role }}_{{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }}.oemdrv.iso"
+    owner: root
+    group: root
+    mode: "0644"

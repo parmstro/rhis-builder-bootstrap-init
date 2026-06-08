@@ -1,0 +1,8 @@
+---
+- name: "Test bootstrap_init role"
+  hosts: localhost
+  gather_facts: false
+  become: true
+
+  roles:
+    - bootstrap_init

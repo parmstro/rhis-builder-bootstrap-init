@@ -1,0 +1,27 @@
+---
+
+- name: "Validate host entry for {{ bootstrap_init_host.hostname | default('undefined') }}"
+  ansible.builtin.include_tasks: "validate_host.yml"
+
+- name: "Ensure OEMDRV destination directory exists"
+  ansible.builtin.file:
+    path: "{{ bootstrap_init_oem_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "Creating kickstart for {{ bootstrap_init_host.hostname }}"
+  ansible.builtin.template:
+    src: "ks.cfg.j2"
+    dest: "{{ bootstrap_init_oem_dir }}/{{ bootstrap_init_ks_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  no_log: true
+
+# set generate_oemdrv_iso to true if you are deploying using a hypervisor,
+# iDRAC, iLO or someother method that requires you to mount a file as an iso
+- name: "Generate OEMDRV iso"
+  when: bootstrap_init_host.generate_oemdrv_iso | default(false)
+  ansible.builtin.include_tasks: "generate_oemdrv_iso.yml"

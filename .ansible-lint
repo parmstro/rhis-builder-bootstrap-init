@@ -1,0 +1,34 @@
+# ansible-lint configuration for rhis-builder-baremetal-init
+---
+profile: production
+
+exclude_paths:
+  - .git/
+  - .github/
+  - .vscode/
+  - .devcontainer/
+  - .claude/
+  - tests/
+  - .cache/
+  - roles/baremetal_init/    # repo-specific exclusion
+
+skip_list:
+  - experimental
+  - role-name
+
+warn_list:
+  - no-changed-when
+  - command-instead-of-module
+  - risky-file-permissions
+  - var-naming[no-role-prefix]   # RHIS uses component-scoped prefixes — clean up incrementally
+
+enable_list:
+  - yaml
+  - fqcn
+  - fqcn-builtins
+
+mock_modules:                    # repo-specific
+  - community.general.iso_create
+
+offline: false
+verbosity: 1

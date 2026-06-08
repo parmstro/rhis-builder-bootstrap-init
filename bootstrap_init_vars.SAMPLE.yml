@@ -1,0 +1,176 @@
+---
+# bootstrap_init_vars.SAMPLE.yml
+#
+# Sample variable file for the bootstrap_init role.
+# Copy this file, rename it, and populate it with values appropriate for your
+# environment. Load it at playbook runtime using the vars_path or vars_dir
+# extra variable:
+#
+#   ansible-playbook -i inventory main.yml \
+#     -e "vault_path=/path/to/vault.yml" \
+#     -e "vars_path=/path/to/your_vars.yml"
+#
+# Sensitive values (passwords, keys, org credentials) must be stored in an
+# Ansible Vault encrypted file and referenced here as vault variables.
+# See README.md for instructions on generating encrypted values.
+#
+# -----------------------------------------------------------------------------
+# Directory settings
+# -----------------------------------------------------------------------------
+
+# Name of the kickstart file written to the OEMDRV volume.
+bootstrap_init_ks_path: "ks.cfg"
+
+# Path to the mounted OEMDRV volume.
+# Use the GUI session path when running on a RHEL desktop:
+# bootstrap_init_oem_dir: "/run/media/{{ ansible_user }}/OEMDRV"
+bootstrap_init_oem_dir: "/mnt/OEMDRV"
+
+# Path where generated OEMDRV ISO files are stored.
+# Only used when generate_oemdrv_iso: true for a host entry.
+bootstrap_init_iso_dir: "/mnt/OEMDRV/ISO"
+
+# -----------------------------------------------------------------------------
+# Host definitions
+# Each entry in bootstrap_init_hosts generates one kickstart file.
+# Valid rhis_role values: provisioner, idm, satellite, kvm
+# -----------------------------------------------------------------------------
+
+bootstrap_init_hosts:
+
+  - rhis_role: "satellite"
+    hostname: "satellite"
+    domain: "example.ca"
+    mac: "ff:ff:ff:ff:ff:fd"
+    ipv4_address: "10.10.8.21"
+    ipv4_netmask: "255.255.252.0"
+    ipv4_prefix: 22
+    ipv4_gateway: "10.10.8.1"
+    name_server1: "10.20.8.5"
+    name_server2: "10.20.8.6"
+    root_enc_pass: "{{ encrypted_root_pass_vault }}"
+    grub_enc_pass: "{{ encrypted_grub_pass_vault }}"
+    # Default filesystem is xfs. Uncomment to use ext4 instead.
+    # filesystem: "ext4"
+    boot_disk: "/dev/nvme0n1"
+    root_disk: "/dev/nvme0n1"
+    # additional_disks extends the root volume group across multiple devices.
+    # additional_disks:
+    #   - "/dev/sda"
+    # Compliance layout - meets CIS L2, DISA-STIG, PCI-DSS partition requirements.
+    boot_mb: 1024
+    boot_efi_mb: 2048
+    lv_root_mb: 65536
+    lv_home_mb: 20480
+    lv_tmp_mb: 6144
+    lv_var_tmp_mb: 6144
+    lv_var_log_mb: 6144
+    lv_var_log_audit_mb: 6144
+    lv_var_mb: 1
+    username: "ansiblerunner"
+    user_enc_pass: "{{ encrypted_user_pass_vault }}"
+    user_sudoer_policy: "{{ user_sudoer_policy_vault }}"
+    ssh_pub_key: "{{ ssh_pub_key_vault }}"
+    org: "{{ cdn_organization_vault }}"
+    activation_key: "{{ cdn_activation_key_vault }}"
+    # Set true to generate an ISO9660 image in bootstrap_init_iso_dir instead
+    # of writing ks.cfg directly to bootstrap_init_oem_dir. Use for iDRAC,
+    # iLO, Redfish, or other virtual media delivery methods.
+    generate_oemdrv_iso: false
+
+  - rhis_role: "idm"
+    hostname: "idm"
+    domain: "example.ca"
+    mac: "ff:ff:ff:ff:ff:fe"
+    ipv4_address: "10.10.8.5"
+    ipv4_netmask: "255.255.252.0"
+    ipv4_prefix: 22
+    ipv4_gateway: "10.10.8.1"
+    name_server1: "10.20.8.5"
+    name_server2: "10.20.8.6"
+    root_enc_pass: "{{ encrypted_root_pass_vault }}"
+    grub_enc_pass: "{{ encrypted_grub_pass_vault }}"
+    # filesystem: "ext4"
+    boot_disk: "/dev/nvme0n1"
+    root_disk: "/dev/nvme0n1"
+    boot_mb: 1024
+    boot_efi_mb: 2048
+    lv_root_mb: 65536
+    lv_home_mb: 20480
+    lv_tmp_mb: 6144
+    lv_var_tmp_mb: 6144
+    lv_var_log_mb: 6144
+    lv_var_log_audit_mb: 6144
+    lv_var_mb: 1
+    username: "ansiblerunner"
+    user_enc_pass: "{{ encrypted_user_pass_vault }}"
+    user_sudoer_policy: "{{ user_sudoer_policy_vault }}"
+    ssh_pub_key: "{{ ssh_pub_key_vault }}"
+    org: "{{ cdn_organization_vault }}"
+    activation_key: "{{ cdn_activation_key_vault }}"
+    generate_oemdrv_iso: false
+
+  - rhis_role: "kvm"
+    hostname: "kvm"
+    domain: "example.ca"
+    mac: "ff:ff:ff:ff:ff:ff"
+    ipv4_address: "10.10.8.50"
+    ipv4_netmask: "255.255.252.0"
+    ipv4_prefix: 22
+    ipv4_gateway: "10.10.8.1"
+    name_server1: "10.20.8.5"
+    name_server2: "10.20.8.6"
+    root_enc_pass: "{{ encrypted_root_pass_vault }}"
+    grub_enc_pass: "{{ encrypted_grub_pass_vault }}"
+    # ext4 is recommended for KVM hosts to allow filesystem size reduction.
+    filesystem: "ext4"
+    boot_disk: "/dev/nvme0n1"
+    root_disk: "/dev/nvme0n1"
+    boot_mb: 1024
+    boot_efi_mb: 2048
+    lv_root_mb: 65536
+    lv_home_mb: 20480
+    lv_tmp_mb: 6144
+    lv_var_tmp_mb: 6144
+    lv_var_log_mb: 6144
+    lv_var_log_audit_mb: 6144
+    lv_var_mb: 1
+    username: "ansiblerunner"
+    user_enc_pass: "{{ encrypted_user_pass_vault }}"
+    user_sudoer_policy: "{{ user_sudoer_policy_vault }}"
+    ssh_pub_key: "{{ ssh_pub_key_vault }}"
+    org: "{{ cdn_organization_vault }}"
+    activation_key: "{{ cdn_activation_key_vault }}"
+    generate_oemdrv_iso: false
+
+  - rhis_role: "provisioner"
+    hostname: "provisioner"
+    domain: "example.ca"
+    mac: "ff:ff:ff:ff:ff:fb"
+    ipv4_address: "10.10.8.1"
+    ipv4_netmask: "255.255.252.0"
+    ipv4_prefix: 22
+    ipv4_gateway: "10.10.8.1"
+    name_server1: "10.20.8.5"
+    name_server2: "10.20.8.6"
+    root_enc_pass: "{{ encrypted_root_pass_vault }}"
+    grub_enc_pass: "{{ encrypted_grub_pass_vault }}"
+    # filesystem: "ext4"
+    boot_disk: "/dev/nvme0n1"
+    root_disk: "/dev/nvme0n1"
+    boot_mb: 1024
+    boot_efi_mb: 2048
+    lv_root_mb: 65536
+    lv_home_mb: 20480
+    lv_tmp_mb: 6144
+    lv_var_tmp_mb: 6144
+    lv_var_log_mb: 6144
+    lv_var_log_audit_mb: 6144
+    lv_var_mb: 1
+    username: "ansiblerunner"
+    user_enc_pass: "{{ encrypted_user_pass_vault }}"
+    user_sudoer_policy: "{{ user_sudoer_policy_vault }}"
+    ssh_pub_key: "{{ ssh_pub_key_vault }}"
+    org: "{{ cdn_organization_vault }}"
+    activation_key: "{{ cdn_activation_key_vault }}"
+    generate_oemdrv_iso: false

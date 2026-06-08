@@ -1,0 +1,7 @@
+---
+# Requirements file for rhis-builder-baremetal-init
+# Install with: ansible-galaxy collection install -r requirements.yml
+
+collections:
+  - name: community.general
+    version: ">=7.0.0"

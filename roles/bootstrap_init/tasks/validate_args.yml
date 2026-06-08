@@ -1,0 +1,31 @@
+---
+# Role-level argument validation for bootstrap_init
+
+- name: "Assert bootstrap_init_hosts is defined and non-empty"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_hosts is defined
+      - bootstrap_init_hosts | length > 0
+    fail_msg: "bootstrap_init_hosts must be defined and contain at least one host entry"
+
+- name: "Assert bootstrap_init_oem_dir is defined"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_oem_dir is defined
+      - bootstrap_init_oem_dir | length > 0
+    fail_msg: "bootstrap_init_oem_dir must be defined and non-empty"
+
+- name: "Assert bootstrap_init_ks_path is defined"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_ks_path is defined
+      - bootstrap_init_ks_path | length > 0
+    fail_msg: "bootstrap_init_ks_path must be defined and non-empty"
+
+- name: "Assert bootstrap_init_iso_dir is defined when generate_oemdrv_iso is requested"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_iso_dir is defined
+      - bootstrap_init_iso_dir | length > 0
+    fail_msg: "bootstrap_init_iso_dir must be defined when generate_oemdrv_iso is true for any host"
+  when: bootstrap_init_hosts | selectattr('generate_oemdrv_iso', 'defined') | selectattr('generate_oemdrv_iso') | list | length > 0

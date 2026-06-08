@@ -1,0 +1,5 @@
+---
+
+- name: "Killroy was here"
+  ansible.builtin.debug:
+    msg: "killroy was here"

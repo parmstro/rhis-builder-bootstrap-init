@@ -1,0 +1,106 @@
+---
+# Per-host argument validation for bootstrap_init
+# Called inside the loop - bootstrap_init_host is the current host entry
+
+- name: "Assert rhis_role is a valid value"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_host.rhis_role is defined
+      - bootstrap_init_host.rhis_role in ['provisioner', 'idm', 'satellite', 'kvm']
+    fail_msg: "rhis_role must be one of: provisioner, idm, satellite, kvm — got '{{ bootstrap_init_host.rhis_role | default('undefined') }}'"
+
+- name: "Assert required host identity fields are present"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_host.hostname is defined and bootstrap_init_host.hostname | length > 0
+      - bootstrap_init_host.domain is defined and bootstrap_init_host.domain | length > 0
+      - bootstrap_init_host.username is defined and bootstrap_init_host.username | length > 0
+    fail_msg: "hostname, domain, and username are required for host entry '{{ bootstrap_init_host.hostname | default('undefined') }}'"
+
+- name: "Assert MAC address format is valid"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_host.mac is defined
+      - bootstrap_init_host.mac is match('^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
+    fail_msg: "mac '{{ bootstrap_init_host.mac | default('undefined') }}' is not a valid MAC address for {{ bootstrap_init_host.hostname }}"
+
+- name: "Assert required network fields are present"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_host.ipv4_address is defined and bootstrap_init_host.ipv4_address | length > 0
+      - bootstrap_init_host.ipv4_netmask is defined and bootstrap_init_host.ipv4_netmask | length > 0
+      - bootstrap_init_host.ipv4_prefix is defined and bootstrap_init_host.ipv4_prefix | int >= 1 and bootstrap_init_host.ipv4_prefix | int <= 32
+      - bootstrap_init_host.ipv4_gateway is defined and bootstrap_init_host.ipv4_gateway | length > 0
+      - bootstrap_init_host.name_server1 is defined and bootstrap_init_host.name_server1 | length > 0
+      - bootstrap_init_host.name_server2 is defined and bootstrap_init_host.name_server2 | length > 0
+    fail_msg: "One or more required network fields are missing for {{ bootstrap_init_host.hostname }}"
+
+- name: "Assert disk paths use /dev/ prefix"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_host.boot_disk is defined
+      - bootstrap_init_host.boot_disk is match('^/dev/')
+      - bootstrap_init_host.root_disk is defined
+      - bootstrap_init_host.root_disk is match('^/dev/')
+    fail_msg: "boot_disk and root_disk must use the full /dev/ path for {{ bootstrap_init_host.hostname }}"
+
+- name: "Assert filesystem type is valid when specified"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_host.filesystem in ['xfs', 'ext4']
+    fail_msg: "filesystem must be 'xfs' or 'ext4' for {{ bootstrap_init_host.hostname }} — got '{{ bootstrap_init_host.filesystem }}'"
+  when: bootstrap_init_host.filesystem is defined
+
+- name: "Assert additional_disks use /dev/ prefix"
+  ansible.builtin.assert:
+    that:
+      - item is match('^/dev/')
+    fail_msg: "additional_disk entry '{{ item }}' must use the full /dev/ path for {{ bootstrap_init_host.hostname }}"
+  loop: "{{ bootstrap_init_host.additional_disks }}"
+  when: bootstrap_init_host.additional_disks is defined
+
+- name: "Assert required partition size fields are present and positive"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_host.boot_mb is defined and bootstrap_init_host.boot_mb | int > 0
+      - bootstrap_init_host.boot_efi_mb is defined and bootstrap_init_host.boot_efi_mb | int > 0
+      - bootstrap_init_host.lv_root_mb is defined and bootstrap_init_host.lv_root_mb | int > 0
+      - bootstrap_init_host.lv_home_mb is defined and bootstrap_init_host.lv_home_mb | int > 0
+      - bootstrap_init_host.lv_tmp_mb is defined and bootstrap_init_host.lv_tmp_mb | int > 0
+      - bootstrap_init_host.lv_var_tmp_mb is defined and bootstrap_init_host.lv_var_tmp_mb | int > 0
+      - bootstrap_init_host.lv_var_log_mb is defined and bootstrap_init_host.lv_var_log_mb | int > 0
+      - bootstrap_init_host.lv_var_log_audit_mb is defined and bootstrap_init_host.lv_var_log_audit_mb | int > 0
+      - bootstrap_init_host.lv_var_mb is defined and bootstrap_init_host.lv_var_mb | int > 0
+    fail_msg: "One or more partition size fields are missing or zero for {{ bootstrap_init_host.hostname }}"
+
+- name: "Assert total requested partition size does not exceed 192GB"
+  ansible.builtin.assert:
+    that:
+      - (bootstrap_init_host.boot_mb | int +
+         bootstrap_init_host.boot_efi_mb | int +
+         bootstrap_init_host.lv_root_mb | int +
+         bootstrap_init_host.lv_home_mb | int +
+         bootstrap_init_host.lv_tmp_mb | int +
+         bootstrap_init_host.lv_var_tmp_mb | int +
+         bootstrap_init_host.lv_var_log_mb | int +
+         bootstrap_init_host.lv_var_log_audit_mb | int) <= 196608
+    fail_msg: "Total requested partition sizes exceed 192GB for {{ bootstrap_init_host.hostname }} — review lv_* values"
+
+- name: "Assert required credential fields are non-empty"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_host.root_enc_pass is defined and bootstrap_init_host.root_enc_pass | length > 0
+      - bootstrap_init_host.user_enc_pass is defined and bootstrap_init_host.user_enc_pass | length > 0
+      - bootstrap_init_host.user_sudoer_policy is defined and bootstrap_init_host.user_sudoer_policy | length > 0
+      - bootstrap_init_host.ssh_pub_key is defined and bootstrap_init_host.ssh_pub_key | length > 0
+    fail_msg: "One or more required credential fields are missing for {{ bootstrap_init_host.hostname }}"
+  no_log: true
+
+- name: "Assert CDN registration fields are present for connected hosts"
+  ansible.builtin.assert:
+    that:
+      - bootstrap_init_host.org is defined and bootstrap_init_host.org | length > 0
+      - bootstrap_init_host.activation_key is defined and bootstrap_init_host.activation_key | length > 0
+    fail_msg: "org and activation_key are required for connected hosts — set disconnected: true to skip CDN registration for {{ bootstrap_init_host.hostname }}"
+  no_log: true
+  when: not (bootstrap_init_host.disconnected | default(false))

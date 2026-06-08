@@ -1,0 +1,12 @@
+---
+# tasks file for bootstrap_init
+
+- name: "Validate role arguments"
+  ansible.builtin.include_tasks: "validate_args.yml"
+
+- name: "Generate bootstrap_init host kickstart"
+  ansible.builtin.include_tasks: "generate_ks.yml"
+  loop: "{{ bootstrap_init_hosts }}"
+  loop_control:
+    loop_var: bootstrap_init_host
+  no_log: false

@@ -1,0 +1,167 @@
+# This kickstart file was created by ansible for {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} running RedHat 9 x86_64
+# This creates the minimal install on baremetal for bootstrapping:
+# - rhis-builder-provisioner (optional)
+# - rhis-builder-idm
+# - rhis-builder-satellite
+
+lang en_US.UTF-8
+selinux --enforcing
+keyboard us
+
+network --device={{ bootstrap_init_host.mac }} --hostname {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} --noipv6 --bootproto static --ip={{ bootstrap_init_host.ipv4_address }} --netmask={{ bootstrap_init_host.ipv4_netmask }} --gateway={{ bootstrap_init_host.ipv4_gateway }} --mtu=1500 --nameserver={{ bootstrap_init_host.name_server1 }},{{ bootstrap_init_host.name_server2 }}
+
+rootpw --iscrypted {{ bootstrap_init_host.root_enc_pass }}
+firewall --service=ssh
+
+# We are going to use an ansible role to assign time services, so just set the time zone
+# --ntpservers is deprecated in RHEL9
+timezone --utc UTC
+
+services --disabled=sendmail,cups,bluetooth,avahi-daemon,avahi-dnsconfd,pcscd
+
+{% if bootstrap_init_host.grub_enc_pass is defined and bootstrap_init_host.grub_enc_pass != "" %}
+bootloader --append="nofb" --iscrypted --password={{ bootstrap_init_host.grub_enc_pass }}
+{% else %}
+bootloader --append="nofb"
+{% endif %}
+
+# boot + efi + swap + tmp + vtmp + vlog + vlaudit + var + root + home = 191 GB
+
+zerombr
+clearpart --initlabel --disklabel=gpt --drives={{ [bootstrap_init_host.boot_disk, bootstrap_init_host.root_disk] | unique | join(',') }}
+
+part /boot --fstype ext4 --size={{ bootstrap_init_host.boot_mb }} --ondisk={{ bootstrap_init_host.boot_disk }}
+part /boot/efi --fstype="efi" --size={{ bootstrap_init_host.boot_efi_mb }} --ondisk={{ bootstrap_init_host.boot_disk }}
+part pv.01 --size=1 --grow --ondisk={{ bootstrap_init_host.root_disk }}
+{% set pvs = [] %}
+{% if bootstrap_init_host.additional_disks is defined -%}
+  {% for disk in bootstrap_init_host.additional_disks -%}
+part pv.{{ disk[-3:] }} --size=1 --grow --ondisk={{ disk }}
+    {% set _ = pvs.append("pv." + disk[-3:]) -%}
+  {% endfor -%}
+{% endif %}
+
+# The following volume configuration meets most major Compliance Profiles (CPGPC, DISA-STIG, CIS, PCI-DSS, etc..)
+volgroup vg_root pv.01 {{ pvs | join(' ') }}
+logvol swap --recommended --vgname=vg_root --name=lv_swap
+logvol /        --vgname=vg_root --size={{ bootstrap_init_host.lv_root_mb }} --name=lv_root --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+logvol /home    --vgname=vg_root --size={{ bootstrap_init_host.lv_home_mb }} --name=lv_home --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+logvol /tmp     --vgname=vg_root --size={{ bootstrap_init_host.lv_tmp_mb }} --name=lv_tmp --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+logvol /var/tmp --vgname=vg_root --size={{ bootstrap_init_host.lv_var_tmp_mb }} --name=lv_var_tmp --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+logvol /var/log --vgname=vg_root --size={{ bootstrap_init_host.lv_var_log_mb }} --name=lv_var_log --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+logvol /var/log/audit --vgname=vg_root --size={{ bootstrap_init_host.lv_var_log_audit_mb }} --name=lv_var_log_audit --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+logvol /var --vgname=vg_root --size={{ bootstrap_init_host.lv_var_mb }} --grow --name=lv_var --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+
+text
+reboot --eject
+
+%packages
+bash-completion
+man-pages
+iproute
+bind-utils
+tmux
+{% if bootstrap_init_host.filesystem is not defined or bootstrap_init_host.filesystem == "xfs" %}
+xfsdump
+{% endif %}
+dnf-utils
+zip
+chrony
+-ntp
+@Core
+{% if bootstrap_init_host.rhis_role == "provisioner" %}
+@container-management
+ansible-core
+{% elif bootstrap_init_host.rhis_role == "kvm" %}
+@container-management
+ansible-core
+@virtualization-host-environment
+@virtualization-tools
+{% endif %}
+%end
+
+%post --nochroot
+exec < /dev/tty3 > /dev/tty3
+chvt 3
+(
+# Add any commands here that must run before the installed system is chrooted.
+# The installed system is accessible under /mnt/sysimage.
+# This section runs in the installer environment with access to the full hardware.
+
+chvt 1
+) 2>&1 | tee /mnt/sysimage/root/install.postnochroot.log
+%end
+
+%post
+exec < /dev/tty3 > /dev/tty3
+chvt 3
+(
+logger "Starting anaconda {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} postinstall"
+
+authselect select sssd --force
+
+# Remove any connection profiles created during installation to avoid conflicts
+find /etc/sysconfig/network-scripts/ -name 'ifcfg-*' ! -name 'ifcfg-lo' -delete 2>/dev/null
+find /etc/NetworkManager/system-connections/ -name '*.nmconnection' -delete 2>/dev/null
+
+# Write NetworkManager keyfile - MAC-based matching, no daemon required, persists on first boot
+mkdir -p /etc/NetworkManager/system-connections
+cat << EOF > /etc/NetworkManager/system-connections/{{ bootstrap_init_host.hostname }}.nmconnection
+[connection]
+id={{ bootstrap_init_host.hostname }}
+type=ethernet
+autoconnect=true
+
+[ethernet]
+mac-address={{ bootstrap_init_host.mac }}
+mtu=1500
+
+[ipv4]
+method=manual
+addresses={{ bootstrap_init_host.ipv4_address }}/{{ bootstrap_init_host.ipv4_prefix }}
+gateway={{ bootstrap_init_host.ipv4_gateway }}
+dns={{ bootstrap_init_host.name_server1 }};{{ bootstrap_init_host.name_server2 }};
+dns-search={{ bootstrap_init_host.domain }}
+
+[ipv6]
+method=disabled
+EOF
+chmod 0600 /etc/NetworkManager/system-connections/{{ bootstrap_init_host.hostname }}.nmconnection
+
+# add our provisioner user - this user is deleted later
+useradd -G wheel {{ bootstrap_init_host.username }} -p '{{ bootstrap_init_host.user_enc_pass }}'
+mkdir -p -m 0700 ~{{ bootstrap_init_host.username }}/.ssh
+cat >> ~{{ bootstrap_init_host.username }}/.ssh/authorized_keys <<EOF
+{{ bootstrap_init_host.ssh_pub_key }}
+EOF
+chown -R {{ bootstrap_init_host.username }}:{{ bootstrap_init_host.username }} ~{{ bootstrap_init_host.username }}/.ssh
+chmod -R go= ~{{ bootstrap_init_host.username }}/.ssh
+
+cat >> /etc/sudoers.d/{{ bootstrap_init_host.username }} <<EOF
+{{ bootstrap_init_host.user_sudoer_policy }}
+EOF
+
+cat >> /etc/hosts <<EOF
+{{ bootstrap_init_host.ipv4_address }} {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }}
+EOF
+
+{% if not (bootstrap_init_host.disconnected | default(false)) %}
+subscription-manager register --org={{ bootstrap_init_host.org }} --activationkey={{ bootstrap_init_host.activation_key }}
+{% endif %}
+
+echo "Updating system time"
+systemctl enable --now chronyd
+/usr/bin/chronyc makestep
+/usr/sbin/hwclock --systohc
+
+{% if not (bootstrap_init_host.disconnected | default(false)) %}
+dnf -y update
+{% endif %}
+
+chvt 1
+) 2>&1 | tee /root/install.post.log
+
+sync
+
+%end
+

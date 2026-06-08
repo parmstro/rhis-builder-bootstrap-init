@@ -1,0 +1,7 @@
+---
+# defaults file for bootstrap_init
+
+bootstrap_init_hosts: []
+bootstrap_init_oem_dir: "/mnt/OEMDRV"
+bootstrap_init_iso_dir: "/mnt/OEMDRV/ISO"
+bootstrap_init_ks_path: "ks.cfg"

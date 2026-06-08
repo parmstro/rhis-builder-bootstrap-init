@@ -1,0 +1,29 @@
+---
+galaxy_info:
+  role_name: bootstrap_init
+  author: parmstro
+  description: >
+    Generates OEMDRV kickstart files to bootstrap RHEL 9 baremetal and virtual
+    hosts (IDM, Satellite, KVM, Provisioner) for the rhis-builder family of projects.
+    Supports direct USB/volume delivery and optional ISO9660 image creation for
+    iDRAC/iLO/Redfish virtual media.
+  license: GPL-3.0-or-later
+  min_ansible_version: "2.15"
+  platforms:
+    - name: EL
+      versions:
+        - "9"
+  galaxy_tags:
+    - rhisbuilder
+    - kickstart
+    - baremetal
+    - provisioning
+    - oemdrv
+    - satellite
+    - idm
+
+# contributors:
+#   - name: Mike Savage
+#     github: heatmiser@users.noreply.github.com
+
+dependencies: []
