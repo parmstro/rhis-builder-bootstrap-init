@@ -17,12 +17,13 @@
       - bootstrap_init_host.username is defined and bootstrap_init_host.username | length > 0
     fail_msg: "hostname, domain, and username are required for host entry '{{ bootstrap_init_host.hostname | default('undefined') }}'"
 
-- name: "Assert MAC address format is valid"
+- name: "Assert MAC address is empty or a valid format"
   ansible.builtin.assert:
     that:
       - bootstrap_init_host.mac is defined
-      - bootstrap_init_host.mac is match('^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
-    fail_msg: "mac '{{ bootstrap_init_host.mac | default('undefined') }}' is not a valid MAC address for {{ bootstrap_init_host.hostname }}"
+      - (bootstrap_init_host.mac | length == 0) or
+        (bootstrap_init_host.mac is match('^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'))
+    fail_msg: "mac '{{ bootstrap_init_host.mac | default('undefined') }}' must be empty or a valid MAC address (xx:xx:xx:xx:xx:xx) for {{ bootstrap_init_host.hostname }}"
 
 - name: "Assert required network fields are present"
   ansible.builtin.assert:

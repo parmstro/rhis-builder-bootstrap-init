@@ -1,3 +1,4 @@
+{% set _mac_known = (bootstrap_init_host.mac is defined and bootstrap_init_host.mac | length > 0 and bootstrap_init_host.mac | lower != 'ff:ff:ff:ff:ff:ff') %}
 # This kickstart file was created by ansible for {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} running RedHat 9 x86_64
 # This creates the minimal install on baremetal for bootstrapping:
 # - rhis-builder-provisioner (optional)
@@ -8,7 +9,7 @@ lang en_US.UTF-8
 selinux --enforcing
 keyboard us
 
-network --device={{ bootstrap_init_host.mac }} --hostname {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} --noipv6 --bootproto static --ip={{ bootstrap_init_host.ipv4_address }} --netmask={{ bootstrap_init_host.ipv4_netmask }} --gateway={{ bootstrap_init_host.ipv4_gateway }} --mtu=1500 --nameserver={{ bootstrap_init_host.name_server1 }},{{ bootstrap_init_host.name_server2 }}
+network --device={% if _mac_known %}{{ bootstrap_init_host.mac }}{% else %}link{% endif %} --hostname {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} --noipv6 --bootproto static --ip={{ bootstrap_init_host.ipv4_address }} --netmask={{ bootstrap_init_host.ipv4_netmask }} --gateway={{ bootstrap_init_host.ipv4_gateway }} --mtu=1500 --nameserver={{ bootstrap_init_host.name_server1 }},{{ bootstrap_init_host.name_server2 }}
 
 rootpw --iscrypted {{ bootstrap_init_host.root_enc_pass }}
 firewall --service=ssh
@@ -111,9 +112,12 @@ cat << EOF > /etc/NetworkManager/system-connections/{{ bootstrap_init_host.hostn
 id={{ bootstrap_init_host.hostname }}
 type=ethernet
 autoconnect=true
+autoconnect-priority=100
 
 [ethernet]
+{% if _mac_known -%}
 mac-address={{ bootstrap_init_host.mac }}
+{% endif -%}
 mtu=1500
 
 [ipv4]
