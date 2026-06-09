@@ -146,10 +146,22 @@ cat >> /etc/sudoers.d/{{ bootstrap_init_host.username }} <<EOF
 EOF
 
 cat >> /etc/hosts <<EOF
-{% for host in bootstrap_init_hosts %}
+{% for host in bootstrap_init_hosts + bootstrap_init_extra_hosts %}
 {{ host.ipv4_address }} {{ host.hostname }}.{{ host.domain }}
 {% endfor %}
 EOF
+
+{% if bootstrap_init_host.disconnected | default(false) or bootstrap_init_host.local_repo_baseurl is defined %}
+# Local package source — subscription-manager registration will write redhat.repo and take over
+cat > /etc/yum.repos.d/rhel-install-media.repo <<EOF
+[install-media]
+name=RHEL Installation Media
+baseurl={{ bootstrap_init_host.local_repo_baseurl | default('cdrom:') }}
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+EOF
+{% endif %}
 
 {% if not (bootstrap_init_host.disconnected | default(false)) %}
 subscription-manager register --org={{ bootstrap_init_host.org }} --activationkey={{ bootstrap_init_host.activation_key }}
