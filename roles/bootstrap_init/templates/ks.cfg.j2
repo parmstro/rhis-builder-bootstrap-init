@@ -146,7 +146,9 @@ cat >> /etc/sudoers.d/{{ bootstrap_init_host.username }} <<EOF
 EOF
 
 cat >> /etc/hosts <<EOF
-{{ bootstrap_init_host.ipv4_address }} {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }}
+{% for host in bootstrap_init_hosts %}
+{{ host.ipv4_address }} {{ host.hostname }}.{{ host.domain }}
+{% endfor %}
 EOF
 
 {% if not (bootstrap_init_host.disconnected | default(false)) %}
