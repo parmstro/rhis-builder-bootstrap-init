@@ -61,6 +61,7 @@ bash-completion
 man-pages
 iproute
 bind-utils
+rsync
 tmux
 {% if bootstrap_init_host.filesystem is not defined or bootstrap_init_host.filesystem == "xfs" %}
 xfsdump
@@ -151,6 +152,26 @@ cat >> /etc/hosts <<EOF
 {% endfor %}
 EOF
 
+# DVD/optical fallback — mount point created here; operator mounts /dev/sr0 at /mnt/cdrom when needed
+mkdir -p /mnt/cdrom
+cat > /etc/yum.repos.d/dvd.repo <<EOF
+[install-media-base-os]
+name=RHEL Installation Media - BaseOS
+baseurl=file:///mnt/cdrom/BaseOS
+enabled=1
+skip_if_unavailable=True
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+
+[install-media-appstream]
+name=RHEL Installation Media - AppStream
+baseurl=file:///mnt/cdrom/AppStream
+enabled=1
+skip_if_unavailable=True
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+EOF
+
 {% if bootstrap_init_host.disconnected | default(false) or bootstrap_init_host.local_repo_baseurl is defined %}
 # Local package source — subscription-manager registration will write redhat.repo and take over
 cat > /etc/yum.repos.d/rhel-install-media.repo <<EOF
@@ -158,6 +179,7 @@ cat > /etc/yum.repos.d/rhel-install-media.repo <<EOF
 name=RHEL Installation Media
 baseurl={{ bootstrap_init_host.local_repo_baseurl | default('cdrom:') }}
 enabled=1
+skip_if_unavailable=True
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
 EOF
