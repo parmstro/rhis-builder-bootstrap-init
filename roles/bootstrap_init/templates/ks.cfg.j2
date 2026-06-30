@@ -189,6 +189,19 @@ EOF
 subscription-manager register --org={{ bootstrap_init_host.org }} --activationkey={{ bootstrap_init_host.activation_key }}
 {% endif %}
 
+{% if bootstrap_init_host.time_servers is defined %}
+echo "Configuring chrony with deployment time servers"
+cat > /etc/chrony.conf << 'CHRONYEOF'
+{% for ts in bootstrap_init_host.time_servers %}
+server {{ ts }} iburst
+{% endfor %}
+driftfile /var/lib/chrony/drift
+makestep 1.0 3
+rtcsync
+deny all
+logdir /var/log/chrony
+CHRONYEOF
+{% endif %}
 echo "Updating system time"
 systemctl enable --now chronyd
 /usr/bin/chronyc makestep
