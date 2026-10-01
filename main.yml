@@ -26,7 +26,14 @@
       ansible.builtin.include_vars:
         file: "{{ vars_path }}"
 
+    - name: "Expose bootstrap vars into play scope"
+      ansible.builtin.set_fact:
+        bootstrap_init_hosts:     "{{ bootstrap_init_hosts | default([]) }}"
+        bootstrap_init_iso_dir:   "{{ bootstrap_init_iso_dir | default('/tmp/bootstrap_isos') }}"
+        bootstrap_init_oem_dir:   "{{ bootstrap_init_oem_dir | default('/mnt/OEMDRV') }}"
+        bootstrap_init_ks_path:   "{{ bootstrap_init_ks_path | default('ks.cfg') }}"
+
     - name: "Apply role bootstrap_init"
-      when: bootstrap_init_hosts is defined and (bootstrap_init_hosts | length) > 0
+      when: bootstrap_init_hosts | length > 0
       ansible.builtin.include_role:
         name: "bootstrap_init"

@@ -1,4 +1,3 @@
-{% set _mac_known = (bootstrap_init_host.mac is defined and bootstrap_init_host.mac | length > 0 and bootstrap_init_host.mac | lower != 'ff:ff:ff:ff:ff:ff') %}
 # This kickstart file was created by ansible for {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} running RedHat 9 x86_64
 # This creates the minimal install on baremetal for bootstrapping:
 # - rhis-builder-provisioner (optional)
@@ -9,7 +8,7 @@ lang en_US.UTF-8
 selinux --enforcing
 keyboard us
 
-network --device={% if _mac_known %}{{ bootstrap_init_host.mac }}{% else %}link{% endif %} --hostname {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} --noipv6 --bootproto static --ip={{ bootstrap_init_host.ipv4_address }} --netmask={{ bootstrap_init_host.ipv4_netmask }} --gateway={{ bootstrap_init_host.ipv4_gateway }} --mtu=1500 --nameserver={{ bootstrap_init_host.name_server1 }},{{ bootstrap_init_host.name_server2 }}
+network --device=link --hostname {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} --noipv6 --bootproto static --ip={{ bootstrap_init_host.ipv4_address }} --netmask={{ bootstrap_init_host.ipv4_netmask }} --gateway={{ bootstrap_init_host.ipv4_gateway }} --mtu=1500 --nameserver={{ bootstrap_init_host.name_server1 }},{{ bootstrap_init_host.name_server2 }}
 
 rootpw --iscrypted {{ bootstrap_init_host.root_enc_pass }}
 firewall --service=ssh
@@ -74,6 +73,7 @@ chrony
 {% if bootstrap_init_host.rhis_role == "provisioner" %}
 @container-management
 ansible-core
+genisoimage
 {% elif bootstrap_init_host.rhis_role == "kvm" %}
 @container-management
 ansible-core
@@ -102,36 +102,14 @@ logger "Starting anaconda {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_h
 
 authselect select sssd --force
 
-# Remove any connection profiles created during installation to avoid conflicts
-find /etc/sysconfig/network-scripts/ -name 'ifcfg-*' ! -name 'ifcfg-lo' -delete 2>/dev/null
-find /etc/NetworkManager/system-connections/ -name '*.nmconnection' -delete 2>/dev/null
-
-# Write NetworkManager keyfile - MAC-based matching, no daemon required, persists on first boot
-mkdir -p /etc/NetworkManager/system-connections
-cat << EOF > /etc/NetworkManager/system-connections/{{ bootstrap_init_host.hostname }}.nmconnection
-[connection]
-id={{ bootstrap_init_host.hostname }}
-type=ethernet
-autoconnect=true
-autoconnect-priority=100
-
-[ethernet]
-{% if _mac_known -%}
-mac-address={{ bootstrap_init_host.mac }}
-{% endif -%}
-mtu=1500
-
-[ipv4]
-method=manual
-addresses={{ bootstrap_init_host.ipv4_address }}/{{ bootstrap_init_host.ipv4_prefix }}
-gateway={{ bootstrap_init_host.ipv4_gateway }}
-dns={{ bootstrap_init_host.name_server1 }};{{ bootstrap_init_host.name_server2 }};
-dns-search={{ bootstrap_init_host.domain }}
-
-[ipv6]
-method=disabled
-EOF
-chmod 0600 /etc/NetworkManager/system-connections/{{ bootstrap_init_host.hostname }}.nmconnection
+# Ensure the primary network connection is static and autoconnects on boot
+_keyfile=$(ls /etc/NetworkManager/system-connections/*.nmconnection 2>/dev/null | head -1)
+if [ -n "$_keyfile" ]; then
+    sed -i 's/^method=.*/method=manual/' "$_keyfile"
+    grep -q '^autoconnect=' "$_keyfile" \
+        && sed -i 's/^autoconnect=.*/autoconnect=true/' "$_keyfile" \
+        || sed -i '/^\[connection\]/a autoconnect=true' "$_keyfile"
+fi
 
 # add our provisioner user - this user is deleted later
 useradd -G wheel {{ bootstrap_init_host.username }} -p '{{ bootstrap_init_host.user_enc_pass }}'
@@ -142,9 +120,10 @@ EOF
 chown -R {{ bootstrap_init_host.username }}:{{ bootstrap_init_host.username }} ~{{ bootstrap_init_host.username }}/.ssh
 chmod -R go= ~{{ bootstrap_init_host.username }}/.ssh
 
-cat >> /etc/sudoers.d/{{ bootstrap_init_host.username }} <<EOF
+cat > /etc/sudoers.d/{{ bootstrap_init_host.username }} <<EOF
 {{ bootstrap_init_host.user_sudoer_policy }}
 EOF
+chmod 0440 /etc/sudoers.d/{{ bootstrap_init_host.username }}
 
 cat >> /etc/hosts <<EOF
 {% for host in bootstrap_init_hosts + bootstrap_init_extra_hosts %}
