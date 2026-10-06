@@ -67,6 +67,9 @@ bootstrap_init_hosts:
     lv_var_log_mb: 6144
     lv_var_log_audit_mb: 6144
     lv_var_mb: 1
+    # Which logical volume consumes remaining disk space. Allowed values: "var", "home".
+    # Default (omitted or unrecognised): var.
+    # grow_vol: "var"
     username: "ansiblerunner"
     user_enc_pass: "{{ encrypted_user_pass_vault }}"
     user_sudoer_policy: "{{ user_sudoer_policy_vault }}"

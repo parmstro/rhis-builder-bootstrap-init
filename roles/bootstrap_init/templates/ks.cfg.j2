@@ -4,11 +4,36 @@
 # - rhis-builder-idm
 # - rhis-builder-satellite
 
+%pre --log=/tmp/kickstart-pre.log
+# Detect the MAC address of the first interface with carrier
+ACTIVE_MAC=""
+for dev in /sys/class/net/*; do
+    devname=$(basename $dev)
+    [ "$devname" = "lo" ] && continue
+    if [ "$(cat $dev/carrier 2>/dev/null)" = "1" ]; then
+        ACTIVE_MAC=$(cat $dev/address)
+        break
+    fi
+done
+
+# Fallback — first non-lo interface with a MAC
+if [ -z "$ACTIVE_MAC" ]; then
+    for dev in /sys/class/net/*; do
+        devname=$(basename $dev)
+        [ "$devname" = "lo" ] && continue
+        ACTIVE_MAC=$(cat $dev/address)
+        break
+    done
+fi
+
+echo "network --device=$ACTIVE_MAC --hostname {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} --noipv6 --bootproto static --ip={{ bootstrap_init_host.ipv4_address }} --netmask={{ bootstrap_init_host.ipv4_netmask }} --gateway={{ bootstrap_init_host.ipv4_gateway }} --mtu=1500 --nameserver={{ bootstrap_init_host.name_server1 }},{{ bootstrap_init_host.name_server2 }}" > /tmp/network-kickstart
+%end
+
 lang en_US.UTF-8
 selinux --enforcing
 keyboard us
 
-network --device=link --hostname {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }} --noipv6 --bootproto static --ip={{ bootstrap_init_host.ipv4_address }} --netmask={{ bootstrap_init_host.ipv4_netmask }} --gateway={{ bootstrap_init_host.ipv4_gateway }} --mtu=1500 --nameserver={{ bootstrap_init_host.name_server1 }},{{ bootstrap_init_host.name_server2 }}
+%include /tmp/network-kickstart
 
 rootpw --iscrypted {{ bootstrap_init_host.root_enc_pass }}
 firewall --service=ssh
@@ -45,12 +70,20 @@ part pv.{{ disk[-3:] }} --size=1 --grow --ondisk={{ disk }}
 volgroup vg_root pv.01 {{ pvs | join(' ') }}
 logvol swap --recommended --vgname=vg_root --name=lv_swap
 logvol /        --vgname=vg_root --size={{ bootstrap_init_host.lv_root_mb }} --name=lv_root --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
-logvol /home    --vgname=vg_root --size={{ bootstrap_init_host.lv_home_mb }} --name=lv_home --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
 logvol /tmp     --vgname=vg_root --size={{ bootstrap_init_host.lv_tmp_mb }} --name=lv_tmp --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
 logvol /var/tmp --vgname=vg_root --size={{ bootstrap_init_host.lv_var_tmp_mb }} --name=lv_var_tmp --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
 logvol /var/log --vgname=vg_root --size={{ bootstrap_init_host.lv_var_log_mb }} --name=lv_var_log --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
 logvol /var/log/audit --vgname=vg_root --size={{ bootstrap_init_host.lv_var_log_audit_mb }} --name=lv_var_log_audit --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+{% if bootstrap_init_host.grow_vol is defined and bootstrap_init_host.grow_vol == 'home' %}
+logvol /home --vgname=vg_root --size={{ bootstrap_init_host.lv_home_mb }} --grow --name=lv_home --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+logvol /var --vgname=vg_root --size={{ bootstrap_init_host.lv_var_mb }} --name=lv_var --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+{% elif bootstrap_init_host.grow_vol is defined and bootstrap_init_host.grow_vol == 'var' %}
+logvol /home --vgname=vg_root --size={{ bootstrap_init_host.lv_home_mb }} --name=lv_home --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
 logvol /var --vgname=vg_root --size={{ bootstrap_init_host.lv_var_mb }} --grow --name=lv_var --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+{% else %}
+logvol /home --vgname=vg_root --size={{ bootstrap_init_host.lv_home_mb }} --name=lv_home --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+logvol /var --vgname=vg_root --size={{ bootstrap_init_host.lv_var_mb }} --grow --name=lv_var --fstype={{ bootstrap_init_host.filesystem | default('xfs') }}
+{% endif %}
 
 text
 reboot --eject
@@ -102,14 +135,35 @@ logger "Starting anaconda {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_h
 
 authselect select sssd --force
 
-# Ensure the primary network connection is static and autoconnects on boot
-_keyfile=$(ls /etc/NetworkManager/system-connections/*.nmconnection 2>/dev/null | head -1)
-if [ -n "$_keyfile" ]; then
-    sed -i 's/^method=.*/method=manual/' "$_keyfile"
-    grep -q '^autoconnect=' "$_keyfile" \
-        && sed -i 's/^autoconnect=.*/autoconnect=true/' "$_keyfile" \
-        || sed -i '/^\[connection\]/a autoconnect=true' "$_keyfile"
-fi
+# Remove any connection profiles created during installation
+find /etc/NetworkManager/system-connections/ -name '*.nmconnection' -delete 2>/dev/null
+
+# Detect the MAC of the first non-lo interface
+_mac=$(ip -o link show | grep -v '^\S*:\s*lo' | head -1 | sed -n 's/.*link\/ether \([^ ]*\).*/\1/p')
+
+# Write a clean static NM keyfile
+cat > /etc/NetworkManager/system-connections/{{ bootstrap_init_host.hostname }}.nmconnection <<NMEOF
+[connection]
+id={{ bootstrap_init_host.hostname }}
+type=ethernet
+autoconnect=true
+autoconnect-priority=100
+
+[ethernet]
+mac-address=${_mac}
+mtu=1500
+
+[ipv4]
+method=manual
+addresses={{ bootstrap_init_host.ipv4_address }}/{{ bootstrap_init_host.ipv4_prefix }}
+gateway={{ bootstrap_init_host.ipv4_gateway }}
+dns={{ bootstrap_init_host.name_server1 }};{{ bootstrap_init_host.name_server2 }};
+dns-search={{ bootstrap_init_host.domain }}
+
+[ipv6]
+method=disabled
+NMEOF
+chmod 0600 /etc/NetworkManager/system-connections/{{ bootstrap_init_host.hostname }}.nmconnection
 
 # add our provisioner user - this user is deleted later
 useradd -G wheel {{ bootstrap_init_host.username }} -p '{{ bootstrap_init_host.user_enc_pass }}'

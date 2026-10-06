@@ -18,10 +18,37 @@
     owner: root
     group: root
     mode: "0644"
+  register: template_result
   no_log: true
+
+- name: "Copy named kickstart for {{ bootstrap_init_host.hostname }}"
+  ansible.builtin.copy:
+    src: "{{ bootstrap_init_oem_dir }}/{{ bootstrap_init_ks_path }}"
+    dest: "{{ bootstrap_init_oem_dir }}/{{ (bootstrap_init_host.hostname ~ '.' ~ bootstrap_init_host.domain) | replace('.', '_') }}_ks.cfg"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+
 
 # set generate_oemdrv_iso to true if you are deploying using a hypervisor,
 # iDRAC, iLO or someother method that requires you to mount a file as an iso
 - name: "Generate OEMDRV iso"
   when: bootstrap_init_host.generate_oemdrv_iso | default(false)
   ansible.builtin.include_tasks: "generate_oemdrv_iso.yml"
+
+- name: "Bootstrap output for {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }}"
+  ansible.builtin.pause:
+    seconds: 0
+    prompt: |
+
+      ══════════════════════════════════════════════════════════════
+        Bootstrap files for: {{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }}
+        Role: {{ bootstrap_init_host.rhis_role }}
+      ──────────────────────────────────────────────────────────────
+        Kickstart:  {{ bootstrap_init_oem_dir }}/{{ bootstrap_init_ks_path }}
+        Named copy: {{ bootstrap_init_oem_dir }}/{{ (bootstrap_init_host.hostname ~ '.' ~ bootstrap_init_host.domain) | replace('.', '_') }}_ks.cfg
+      {% if bootstrap_init_host.generate_oemdrv_iso | default(false) %}
+        OEMDRV ISO: {{ bootstrap_init_iso_dir }}/{{ bootstrap_init_host.rhis_role }}_{{ bootstrap_init_host.hostname }}.{{ bootstrap_init_host.domain }}.oemdrv.iso
+      {% endif %}
+      ══════════════════════════════════════════════════════════════
